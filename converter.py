@@ -1,19 +1,16 @@
 import time
+import boto3
 import pystep
-
 from OCCT.STEPCAFControl import STEPCAFControl_Reader
 from OCCT.TopoDS import TopoDS_Shape
 from OCCT.StlAPI import StlAPI_Writer
-
 import FreeCAD
 import Mesh
-
 from PIL import Image, ImageDraw, ImageFont
 import pyvista
-
 import assimp
-
 import signal
+
 
 def timeout_handler(signum, frame):
     timeout = True
@@ -138,8 +135,6 @@ def generate_png_render(input_filename, output_filename):
     # Save the plot as a PNG image
     pyvista.plotting.save_png(output_filename)
 
-from PIL import Image, ImageDraw, ImageFont
-
 def combine_images(input_files, output_file):
     # Determine the size of the grid
     grid_size = int(len(input_files) ** 0.5)
@@ -170,13 +165,54 @@ def combine_images(input_files, output_file):
     # Save the grid image to the output file
     grid_image.save(output_file)
 
-# Example usage
-input_files = ["image1.png", "image2.png", "image3.png", "image4.png", "image5.png", "image6.png"]
-combine_images(input_files, "output.png", "Text on the bottom left corner")
+def list_objects(bucket_name,prefix,limit=100):
+    # Create an S3 client
+    s3 = boto3.client('s3')
 
+    # Set the maximum number of objects to return
+    max_objects = limit
+
+    # Initialize the list of object keys
+    object_keys = []
+
+    # Set the "marker" to None to start at the beginning of the bucket
+    marker = None
+
+    while True:
+        # List the objects in the bucket, starting at the marker
+        response = s3.list_objects(Bucket=bucket_name, Prefix=prefix, Marker=marker)
+
+        # Add the object keys to the list
+        object_keys.extend([obj['Key'] for obj in response['Contents']])
+
+        # Set the marker to the last object in the list
+        marker = object_keys[-1] if object_keys else None
+
+        # Break the loop if we have reached the maximum number of objects or the end of the bucket
+        if len(object_keys) >= max_objects or not response['IsTruncated']:
+            break
+
+    # Return the list of object keys
+    return object_keys[:max_objects]
+
+def download_object(bucket_name, object_key, filename):
+    # Create an S3 client
+    s3 = boto3.client('s3')
+
+    # Download the object from the bucket
+    s3.download_file(bucket_name, object_key, '/tmp/' + filename)
+
+#Run start
+files = list_objects('3dpeople-digifabster-uploads','step/')
+print('there are {} objects in the list'.format(len(files)))
+
+quit()
+for file in files: 
+    input_filename = file
 try:
     # Call the function with a 5 second timeout
-    my_function(2, 3)
+    output_filename = 'step_to_stl_occt'
+    elapsed = convert_step_to_stl_occt(input_filename, output_filename)
 except TimeoutError as e:
     print(e)
 
